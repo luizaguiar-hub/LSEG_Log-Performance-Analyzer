@@ -1,6 +1,8 @@
 # log_monitor.py
 
 import datetime
+import smtplib
+from email.message import EmailMessage
 
 def parse_log(log_data):
     # Initializes a dictionary to store process information, using a unique ID as the key.
@@ -140,9 +142,38 @@ def generate_report(reports):
 
     return "\n".join(report_lines)
 
+def send_email_report(subject, body, sender_email, recipient_email, password):
+    # Creates the email message object.
+    msg = EmailMessage()
+    msg.set_content(body)
+    msg['Subject'] = subject
+    msg['From'] = sender_email
+    msg['To'] = recipient_email
+
+    try:
+        # Connects to the SMTP server (using a common one as an example).
+        # You may need to change 'smtp.gmail.com' and the port for your provider.
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            # Logs in to the email account.
+            smtp.login(sender_email, password)
+            # Sends the email.
+            smtp.send_message(msg)
+        print("\nEmail sent successfully!")
+    except Exception as e:
+        # Handles any errors during the email sending process.
+        print(f"\nFailed to send email. An error occurred: {e}")
+
 if __name__ == '__main__':
     # Defines the path to the log file.
     log_file_path = 'logs_9.log'
+    
+    # --- EMAIL CONFIGURATION ---
+    # !!! IMPORTANT: Fill in your email details here. !!!
+    # This example uses Gmail with SSL. You may need to enable "less secure apps" or
+    # use an app-specific password if you have 2FA enabled.
+    sender_email = "your_email@example.com"
+    sender_password = "your_password"
+    recipient_email = "your_recipient@example.com"
     
     try:
         # Opens and reads the log file.
@@ -163,6 +194,38 @@ if __name__ == '__main__':
             
         print("\nReport saved to 'log_report.txt'")
         
+        # --- EMAIL ALERT LOGIC ---
+        # Checks if there are any jobs that need an alert.
+        if reports['longer_than_5min'] or reports['longer_than_10min'] or reports['failed']:
+            alert_body = "The following jobs require attention:\n\n"
+            if reports['longer_than_5min']:
+                alert_body += "Jobs that took longer than 5 minutes:\n"
+                for job in reports['longer_than_5min']:
+                    alert_body += f"- PID: {job['pid']}, Description: {job['description']}, Duration: {job['duration']:.2f}s\n"
+                alert_body += "\n"
+            
+            if reports['longer_than_10min']:
+                alert_body += "Jobs that took longer than 10 minutes:\n"
+                for job in reports['longer_than_10min']:
+                    alert_body += f"- PID: {job['pid']}, Description: {job['description']}, Duration: {job['duration']:.2f}s\n"
+                alert_body += "\n"
+            
+            if reports['failed']:
+                alert_body += "Failed/Incomplete Jobs:\n"
+                for job in reports['failed']:
+                    alert_body += f"- PID: {job['pid']}, Description: {job['description']}\n"
+                alert_body += "\n"
+
+            send_email_report(
+                subject="Log Monitor Alert: Long-Running or Failed Jobs",
+                body=alert_body,
+                sender_email=sender_email,
+                recipient_email=recipient_email,
+                password=sender_password
+            )
+        else:
+            print("\nNo alerts to send. All monitored jobs are within acceptable limits.")
+
     except FileNotFoundError:
         # Handles the case where the log file is not found.
         print(f"Error: The file '{log_file_path}' was not found.")
