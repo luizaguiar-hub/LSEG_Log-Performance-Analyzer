@@ -1,7 +1,5 @@
 # LSEG_Log-Performance-Analyzer
-This is a Python script that analyzes log files to assess job performance. It parses log data, calculates job durations, and generates a report that groups jobs into categories based on their runtime, making it easy to identify slow or failed tasks.
 
-Description
 This is a Python script that analyzes log files to assess job performance. It parses log data, calculates job durations, and generates a report that groups jobs into categories based on their runtime, making it easy to identify slow or failed tasks.
 
 You can find an example of the report on the file log_report.txt
@@ -17,8 +15,9 @@ Save the Script: Save the provided log_monitor.py script in the same directory a
 Name the Log File: Ensure your log file is named logs_9.log. If it has a different name, you will need to update the log_file_path variable in the if __name__ == '__main__': block of the script.
 
 Run the Script: Execute the script from your terminal:
-
+```
 python log_monitor.py
+```
 
 The script will print a performance report to your console and save a copy as log_report.txt in the same directory.
 
@@ -40,6 +39,8 @@ Longer than 10 minutes
 Failed Job Tracking: The report now includes a dedicated section for any jobs that started but did not have a corresponding END entry, helping to quickly identify failed or incomplete processes.
 
 Output to File: In addition to printing the report to the console, the script now saves the full output to a file named log_report.txt for easy reference and sharing.
+
+Email alerts
 
 # Log Monitoring Application
 
