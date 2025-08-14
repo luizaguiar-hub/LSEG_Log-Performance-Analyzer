@@ -1,106 +1,171 @@
 # log_monitor.py
+
 import datetime
 
 def parse_log(log_data):
-    """
-    Parses log data to identify start and end times for each process ID.
-    Args:
-        log_data (list): A list of log lines.
-    Returns:
-        dict: A dictionary with process IDs as keys and a dictionary of start and end times as values.
-    """
-    # Dictionary to store the start and end times for each process ID.
+    # Initializes a dictionary to store process information, using a unique ID as the key.
     processes = {}
+    
+    # Iterate through each line of the log data.
     for line in log_data:
         try:
-            # Split the line by comma to get the individual components.
+            # Splits the line into components: timestamp, description, action, and PID.
             parts = line.strip().split(',')
-            # Ensure the line has the expected number of parts and format.
             if len(parts) != 4:
+                # Skips lines that do not have the expected format.
                 continue
 
-            timestamp_str, job_desc, status, pid = parts
-            pid = int(pid)
-            timestamp = datetime.datetime.strptime(timestamp_str, '%H:%M:%S').time()
-
-            # Store the start and end times for each process.
-            if pid not in processes:
-                processes[pid] = {'start': None, 'end': None}
+            # Extracts and cleans the data from the line parts.
+            timestamp_str, job_desc, action, pid_str = parts
+            pid = int(pid_str.strip())
             
-            if status.strip().upper() == 'START':
-                processes[pid]['start'] = timestamp
-            elif status.strip().upper() == 'END':
-                processes[pid]['end'] = timestamp
+            # Parses the timestamp string into a datetime.time object.
+            time_obj = datetime.datetime.strptime(timestamp_str.strip(), '%H:%M:%S').time()
+
+            # If the process ID (PID) is not already in the dictionary, create a new entry.
+            if pid not in processes:
+                processes[pid] = {
+                    'description': job_desc.strip(),
+                    'start': None,
+                    'end': None
+                }
+
+            # Updates the start or end time based on the action in the log line.
+            if action.strip().upper() == 'START':
+                processes[pid]['start'] = time_obj
+            elif action.strip().upper() == 'END':
+                processes[pid]['end'] = time_obj
+
         except (ValueError, IndexError):
-            # Skip lines that can't be parsed correctly.
+            # Handles potential errors during parsing, like incorrect time format or missing parts.
+            print(f"Warning: Could not parse line: {line.strip()}")
             continue
+            
     return processes
 
 def calculate_duration(processes):
-    """
-    Calculates the duration for each process and flags based on thresholds.
-    Args:
-        processes (dict): A dictionary of processes with start and end times.
-    Returns:
-        list: A list of reports for each process.
-    """
-    reports = []
-    for pid, times in processes.items():
-        start_time = times.get('start')
-        end_time = times.get('end')
+    # Initializes lists to store the different categories of job reports.
+    reports = {
+        'less_than_1min': [],
+        'longer_than_3min': [],
+        'longer_than_5min': [],
+        'longer_than_10min': [],
+        'failed': []
+    }
 
-        # Only process jobs that have both a start and end time.
-        if start_time and end_time:
-            # Convert time objects to datetime objects for calculation.
-            start_datetime = datetime.datetime.combine(datetime.date.min, start_time)
-            end_datetime = datetime.datetime.combine(datetime.date.min, end_time)
-            duration = (end_datetime - start_datetime).total_seconds()
+    # Iterates through all processes in the dictionary.
+    for pid, data in processes.items():
+        # Check if both start and end times exist. If not, the job is considered incomplete.
+        if data['start'] and data['end']:
+            # Combines the date and time for duration calculation.
+            # A common dummy date is used to make the subtraction possible.
+            dummy_date = datetime.date(1, 1, 1)
+            start_datetime = datetime.datetime.combine(dummy_date, data['start'])
+            end_datetime = datetime.datetime.combine(dummy_date, data['end'])
 
-            # Define time thresholds in seconds.
-            warning_threshold = 5 * 60  # 5 minutes
-            error_threshold = 10 * 60  # 10 minutes
-
-            # Create a report for each process.
+            # Calculates the duration in seconds.
+            duration_seconds = (end_datetime - start_datetime).total_seconds()
+            
+            # Appends the report to the appropriate category based on the duration.
             report = {
                 'pid': pid,
-                'duration': duration,
-                'status': 'OK',
-                'message': f'Job {pid} completed in {duration:.2f} seconds.'
+                'description': data['description'],
+                'duration': duration_seconds
             }
 
-            # Check against thresholds.
-            if duration > error_threshold:
-                report['status'] = 'ERROR'
-                report['message'] = f'ERROR: Job {pid} took longer than 10 minutes. Duration: {duration:.2f} seconds.'
-            elif duration > warning_threshold:
-                report['status'] = 'WARNING'
-                report['message'] = f'WARNING: Job {pid} took longer than 5 minutes. Duration: {duration:.2f} seconds.'
-            
-            reports.append(report)
+            if duration_seconds < 60:
+                reports['less_than_1min'].append(report)
+            elif duration_seconds > 600: # 10 minutes
+                reports['longer_than_10min'].append(report)
+            elif duration_seconds > 300: # 5 minutes
+                reports['longer_than_5min'].append(report)
+            elif duration_seconds > 180: # 3 minutes
+                reports['longer_than_3min'].append(report)
+        else:
+            # If a job has a start time but no end time, it is considered failed/incomplete.
+            if data['start']:
+                reports['failed'].append({
+                    'pid': pid,
+                    'description': data['description']
+                })
     return reports
 
-def generate_report(file_path):
-    """
-    Main function to read a log file, process it, and print a report.
-    Args:
-        file_path (str): The path to the log file.
-    """
-    try:
-        with open(file_path, 'r') as f:
-            log_data = f.readlines()
-    except FileNotFoundError:
-        print(f"Error: The file '{file_path}' was not found.")
-        return
-
-    processes = parse_log(log_data)
-    reports = calculate_duration(processes)
+def generate_report(reports):
+    # Creates a formatted string for the final report.
+    report_lines = []
+    report_lines.append("### Log Monitor Report ###\n")
     
-    # Print the final report.
-    print("--- Log Monitoring Report ---")
-    for report in reports:
-        print(report['message'])
+    # Function to format job details for the report.
+    def format_job(job):
+        duration_formatted = ""
+        if 'duration' in job:
+            duration_formatted = f" (Duration: {job['duration']:.2f}s)"
+        return f"- PID: {job['pid']}, Description: {job['description']}{duration_formatted}"
+
+    # Adds the jobs from each category to the report string.
+    report_lines.append("Jobs that took less than 1 minute:")
+    if reports['less_than_1min']:
+        for job in reports['less_than_1min']:
+            report_lines.append(format_job(job))
+    else:
+        report_lines.append("- No jobs in this category.")
+    
+    report_lines.append("\nJobs that took longer than 3 minutes:")
+    if reports['longer_than_3min']:
+        for job in reports['longer_than_3min']:
+            report_lines.append(format_job(job))
+    else:
+        report_lines.append("- No jobs in this category.")
+        
+    report_lines.append("\nJobs that took longer than 5 minutes:")
+    if reports['longer_than_5min']:
+        for job in reports['longer_than_5min']:
+            report_lines.append(format_job(job))
+    else:
+        report_lines.append("- No jobs in this category.")
+        
+    report_lines.append("\nJobs that took longer than 10 minutes:")
+    if reports['longer_than_10min']:
+        for job in reports['longer_than_10min']:
+            report_lines.append(format_job(job))
+    else:
+        report_lines.append("- No jobs in this category.")
+
+    report_lines.append("\nFailed/Incomplete Jobs:")
+    if reports['failed']:
+        for job in reports['failed']:
+            report_lines.append(format_job(job))
+    else:
+        report_lines.append("- No failed or incomplete jobs.")
+
+    return "\n".join(report_lines)
 
 if __name__ == '__main__':
-    # You can change the file path here.
-    log_file = 'logs_9.log' 
-    generate_report(log_file)
+    # Defines the path to the log file.
+    log_file_path = 'logs_9.log'
+    
+    try:
+        # Opens and reads the log file.
+        with open(log_file_path, 'r') as f:
+            log_data = f.readlines()
+        
+        # Calls the functions to process the log data and generate the report.
+        processes = parse_log(log_data)
+        reports = calculate_duration(processes)
+        final_report = generate_report(reports)
+        
+        # Prints the report to the console.
+        print(final_report)
+        
+        # Saves the report to a new file.
+        with open('log_report.txt', 'w') as f:
+            f.write(final_report)
+            
+        print("\nReport saved to 'log_report.txt'")
+        
+    except FileNotFoundError:
+        # Handles the case where the log file is not found.
+        print(f"Error: The file '{log_file_path}' was not found.")
+    except Exception as e:
+        # Catches any other unexpected errors.
+        print(f"An error occurred: {e}")
