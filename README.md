@@ -38,3 +38,26 @@ Longer than 10 minutes
 Failed Job Tracking: The report now includes a dedicated section for any jobs that started but did not have a corresponding END entry, helping to quickly identify failed or incomplete processes.
 
 Output to File: In addition to printing the report to the console, the script now saves the full output to a file named log_report.txt for easy reference and sharing.
+
+# Log Monitoring Application
+
+This is a Python application for monitoring a log file, calculating the duration of jobs and tasks, and generating a report with warnings and errors based on time thresholds.
+
+## Features
+
+- Parses a CSV-formatted log file.
+- Tracks the start and end times of each job using its process ID (PID).
+- Calculates the total duration for each completed job.
+- Flags jobs taking longer than 5 minutes as a **WARNING**.
+- Flags jobs taking longer than 10 minutes as an **ERROR**.
+
+## Setup and Usage
+
+### Prerequisites
+
+- Python 3.13.1 or later.
+- A text editor or IDE.
+
+### Installation
+
+No special libraries are needed; all dependencies are part of the standard Python library. Simply clone this repository to your local machine.
