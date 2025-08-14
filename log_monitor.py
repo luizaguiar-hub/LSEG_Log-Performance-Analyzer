@@ -199,7 +199,7 @@ def send_email_report(subject, body, sender_email, recipient_email, password):
 
 if __name__ == '__main__':
     # Defines the path to the log file.
-    log_file_path = 'logs_9.log'
+    log_file_path = 'logs 9.log'
     
     # --- EMAIL CONFIGURATION ---
     # !!! IMPORTANT: Fill in your email details here. !!!
@@ -221,12 +221,16 @@ if __name__ == '__main__':
         
         # Prints the report to the console.
         print(final_report)
+
+        # Generates a timestamp for the report filename.
+        timestamp_str = datetime.datetime.now().strftime('%d-%m-%y_%H-%M-%S')
+        report_filename = f"log_report_{timestamp_str}.txt"
         
-        # Saves the report to a new file.
-        with open('log_report.txt', 'w') as f:
+        # Saves the report to a new file with the timestamp in the name.
+        with open(report_filename, 'w') as f:
             f.write(final_report)
             
-        print("\nReport saved to 'log_report.txt'")
+        print(f"\nReport saved to '{report_filename}'")
         
         # --- EMAIL ALERT LOGIC ---
         # Checks if there are any jobs that need an alert.
