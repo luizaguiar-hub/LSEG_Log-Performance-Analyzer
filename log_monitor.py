@@ -67,7 +67,7 @@ def calculate_duration(processes):
 
     Returns:
         list: A list of dictionaries, where each dictionary is a report for a single job
-              and includes its status ('OK', 'WARNING', or 'ERROR').
+              and includes its status ('OK', 'WARNING', 'ERROR', or 'CRITICAL_ERROR').
     """
     reports = []
     
@@ -101,7 +101,7 @@ def calculate_duration(processes):
         else:
             # If a job has a start time but no end time, it is considered a failed job.
             if data['start']:
-                report['status'] = 'ERROR'
+                report['status'] = 'CRITICAL_ERROR'
                 report['duration'] = 'N/A'  # No duration for incomplete jobs
 
         reports.append(report)
@@ -119,7 +119,7 @@ def generate_report(reports):
         str: A formatted string ready to be printed or saved to a file.
     """
     # Group reports by their status for a cleaner output.
-    grouped_reports = {'OK': [], 'WARNING': [], 'ERROR': []}
+    grouped_reports = {'OK': [], 'WARNING': [], 'ERROR': [], 'CRITICAL_ERROR': []}
     for report in reports:
         grouped_reports[report['status']].append(report)
 
@@ -150,9 +150,16 @@ def generate_report(reports):
     else:
         report_lines.append("- No jobs in this category.")
         
-    report_lines.append("\n--- ERROR Jobs (More than 10 minutes or Failed) ---")
+    report_lines.append("\n--- ERROR Jobs (More than 10 minutes) ---")
     if grouped_reports['ERROR']:
         for job in grouped_reports['ERROR']:
+            report_lines.append(format_job(job))
+    else:
+        report_lines.append("- No jobs in this category.")
+
+    report_lines.append("\n--- CRITICAL ERROR Jobs (Failed/Incomplete) ---")
+    if grouped_reports['CRITICAL_ERROR']:
+        for job in grouped_reports['CRITICAL_ERROR']:
             report_lines.append(format_job(job))
     else:
         report_lines.append("- No jobs in this category.")
@@ -192,7 +199,7 @@ def send_email_report(subject, body, sender_email, recipient_email, password):
 
 if __name__ == '__main__':
     # Defines the path to the log file.
-    log_file_path = 'logs_9.log'
+    log_file_path = 'logs 9.log'
     
     # --- EMAIL CONFIGURATION ---
     # !!! IMPORTANT: Fill in your email details here. !!!
@@ -223,11 +230,20 @@ if __name__ == '__main__':
         
         # --- EMAIL ALERT LOGIC ---
         # Checks if there are any jobs that need an alert.
+        critical_error_jobs = [r for r in reports if r['status'] == 'CRITICAL_ERROR']
         warning_jobs = [r for r in reports if r['status'] == 'WARNING']
         error_jobs = [r for r in reports if r['status'] == 'ERROR']
         
-        if warning_jobs or error_jobs:
+        if critical_error_jobs or warning_jobs or error_jobs:
             alert_body = "The following jobs require attention:\n\n"
+            email_subject = "Log Monitor Alert"
+            
+            if critical_error_jobs:
+                alert_body += "--- CRITICAL ERROR Jobs (Failed/Incomplete) ---\n"
+                for job in critical_error_jobs:
+                    alert_body += f"- PID: {job['pid']}, Description: {job['description']} (Failed/Incomplete)\n"
+                alert_body += "\n"
+                email_subject = "CRITICAL ERROR DETECTED"
             
             if warning_jobs:
                 alert_body += "--- WARNING Jobs (5 to 10 minutes) ---\n"
@@ -236,14 +252,13 @@ if __name__ == '__main__':
                 alert_body += "\n"
             
             if error_jobs:
-                alert_body += "--- ERROR Jobs (More than 10 minutes or Failed) ---\n"
+                alert_body += "--- ERROR Jobs (More than 10 minutes) ---\n"
                 for job in error_jobs:
-                    duration_str = f", Duration: {job['duration']:.2f}s" if job['duration'] != 'N/A' else " (Failed/Incomplete)"
-                    alert_body += f"- PID: {job['pid']}, Description: {job['description']}{duration_str}\n"
+                    alert_body += f"- PID: {job['pid']}, Description: {job['description']}, Duration: {job['duration']:.2f}s\n"
                 alert_body += "\n"
 
             send_email_report(
-                subject="Log Monitor Alert: Warning and Error Jobs Detected",
+                subject=email_subject,
                 body=alert_body,
                 sender_email=sender_email,
                 recipient_email=recipient_email,
