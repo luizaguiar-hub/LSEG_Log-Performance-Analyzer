@@ -1,10 +1,23 @@
 # log_monitor.py
 
+# This script monitors and analyzes log files to assess job performance,
+# categorizing jobs by duration and sending email alerts for critical issues.
+
 import datetime
 import smtplib
 from email.message import EmailMessage
 
 def parse_log(log_data):
+    """
+    Parses a list of log lines to extract job information.
+
+    Args:
+        log_data (list): A list of strings, where each string is a line from the log file.
+
+    Returns:
+        dict: A dictionary where keys are process IDs (PIDs) and values are
+              dictionaries containing job descriptions, start times, and end times.
+    """
     # Initializes a dictionary to store process information, using a unique ID as the key.
     processes = {}
     
@@ -46,18 +59,27 @@ def parse_log(log_data):
     return processes
 
 def calculate_duration(processes):
-    # Initializes lists to store the different categories of job reports.
-    reports = {
-        'less_than_1min': [],
-        'longer_than_3min': [],
-        'longer_than_5min': [],
-        'longer_than_10min': [],
-        'failed': []
-    }
+    """
+    Calculates the duration of completed jobs and assigns a status.
 
+    Args:
+        processes (dict): The dictionary of process data from the parse_log function.
+
+    Returns:
+        list: A list of dictionaries, where each dictionary is a report for a single job
+              and includes its status ('OK', 'WARNING', or 'ERROR').
+    """
+    reports = []
+    
     # Iterates through all processes in the dictionary.
     for pid, data in processes.items():
-        # Check if both start and end times exist. If not, the job is considered incomplete.
+        # A report dictionary to be populated and appended.
+        report = {
+            'pid': pid,
+            'description': data['description']
+        }
+
+        # Check if both start and end times exist.
         if data['start'] and data['end']:
             # Combines the date and time for duration calculation.
             # A common dummy date is used to make the subtraction possible.
@@ -67,82 +89,87 @@ def calculate_duration(processes):
 
             # Calculates the duration in seconds.
             duration_seconds = (end_datetime - start_datetime).total_seconds()
+            report['duration'] = duration_seconds
             
-            # Appends the report to the appropriate category based on the duration.
-            report = {
-                'pid': pid,
-                'description': data['description'],
-                'duration': duration_seconds
-            }
-
-            if duration_seconds < 60:
-                reports['less_than_1min'].append(report)
-            elif duration_seconds > 600: # 10 minutes
-                reports['longer_than_10min'].append(report)
-            elif duration_seconds > 300: # 5 minutes
-                reports['longer_than_5min'].append(report)
-            elif duration_seconds > 180: # 3 minutes
-                reports['longer_than_3min'].append(report)
+            # Assigns a status based on the duration.
+            if duration_seconds > 600:  # More than 10 minutes
+                report['status'] = 'ERROR'
+            elif duration_seconds > 300:  # More than 5 minutes
+                report['status'] = 'WARNING'
+            else:
+                report['status'] = 'OK'
         else:
-            # If a job has a start time but no end time, it is considered failed/incomplete.
+            # If a job has a start time but no end time, it is considered a failed job.
             if data['start']:
-                reports['failed'].append({
-                    'pid': pid,
-                    'description': data['description']
-                })
+                report['status'] = 'ERROR'
+                report['duration'] = 'N/A'  # No duration for incomplete jobs
+
+        reports.append(report)
+
     return reports
 
 def generate_report(reports):
-    # Creates a formatted string for the final report.
+    """
+    Generates a formatted, multi-line string report from the categorized job data.
+
+    Args:
+        reports (list): A list of job report dictionaries.
+
+    Returns:
+        str: A formatted string ready to be printed or saved to a file.
+    """
+    # Group reports by their status for a cleaner output.
+    grouped_reports = {'OK': [], 'WARNING': [], 'ERROR': []}
+    for report in reports:
+        grouped_reports[report['status']].append(report)
+
     report_lines = []
     report_lines.append("### Log Monitor Report ###\n")
     
     # Function to format job details for the report.
     def format_job(job):
         duration_formatted = ""
-        if 'duration' in job:
+        if 'duration' in job and job['duration'] != 'N/A':
             duration_formatted = f" (Duration: {job['duration']:.2f}s)"
+        elif job['duration'] == 'N/A':
+            duration_formatted = " (Status: Incomplete/Failed)"
         return f"- PID: {job['pid']}, Description: {job['description']}{duration_formatted}"
 
     # Adds the jobs from each category to the report string.
-    report_lines.append("Jobs that took less than 1 minute:")
-    if reports['less_than_1min']:
-        for job in reports['less_than_1min']:
+    report_lines.append("--- OK Jobs (Less than 5 minutes) ---")
+    if grouped_reports['OK']:
+        for job in grouped_reports['OK']:
             report_lines.append(format_job(job))
     else:
         report_lines.append("- No jobs in this category.")
     
-    report_lines.append("\nJobs that took longer than 3 minutes:")
-    if reports['longer_than_3min']:
-        for job in reports['longer_than_3min']:
+    report_lines.append("\n--- WARNING Jobs (5 to 10 minutes) ---")
+    if grouped_reports['WARNING']:
+        for job in grouped_reports['WARNING']:
             report_lines.append(format_job(job))
     else:
         report_lines.append("- No jobs in this category.")
         
-    report_lines.append("\nJobs that took longer than 5 minutes:")
-    if reports['longer_than_5min']:
-        for job in reports['longer_than_5min']:
+    report_lines.append("\n--- ERROR Jobs (More than 10 minutes or Failed) ---")
+    if grouped_reports['ERROR']:
+        for job in grouped_reports['ERROR']:
             report_lines.append(format_job(job))
     else:
         report_lines.append("- No jobs in this category.")
         
-    report_lines.append("\nJobs that took longer than 10 minutes:")
-    if reports['longer_than_10min']:
-        for job in reports['longer_than_10min']:
-            report_lines.append(format_job(job))
-    else:
-        report_lines.append("- No jobs in this category.")
-
-    report_lines.append("\nFailed/Incomplete Jobs:")
-    if reports['failed']:
-        for job in reports['failed']:
-            report_lines.append(format_job(job))
-    else:
-        report_lines.append("- No failed or incomplete jobs.")
-
     return "\n".join(report_lines)
 
 def send_email_report(subject, body, sender_email, recipient_email, password):
+    """
+    Sends an email notification.
+
+    Args:
+        subject (str): The subject line of the email.
+        body (str): The content of the email.
+        sender_email (str): The email address of the sender.
+        recipient_email (str): The email address of the recipient.
+        password (str): The password for the sender's email account.
+    """
     # Creates the email message object.
     msg = EmailMessage()
     msg.set_content(body)
@@ -196,28 +223,27 @@ if __name__ == '__main__':
         
         # --- EMAIL ALERT LOGIC ---
         # Checks if there are any jobs that need an alert.
-        if reports['longer_than_5min'] or reports['longer_than_10min'] or reports['failed']:
+        warning_jobs = [r for r in reports if r['status'] == 'WARNING']
+        error_jobs = [r for r in reports if r['status'] == 'ERROR']
+        
+        if warning_jobs or error_jobs:
             alert_body = "The following jobs require attention:\n\n"
-            if reports['longer_than_5min']:
-                alert_body += "Jobs that took longer than 5 minutes:\n"
-                for job in reports['longer_than_5min']:
+            
+            if warning_jobs:
+                alert_body += "--- WARNING Jobs (5 to 10 minutes) ---\n"
+                for job in warning_jobs:
                     alert_body += f"- PID: {job['pid']}, Description: {job['description']}, Duration: {job['duration']:.2f}s\n"
                 alert_body += "\n"
             
-            if reports['longer_than_10min']:
-                alert_body += "Jobs that took longer than 10 minutes:\n"
-                for job in reports['longer_than_10min']:
-                    alert_body += f"- PID: {job['pid']}, Description: {job['description']}, Duration: {job['duration']:.2f}s\n"
-                alert_body += "\n"
-            
-            if reports['failed']:
-                alert_body += "Failed/Incomplete Jobs:\n"
-                for job in reports['failed']:
-                    alert_body += f"- PID: {job['pid']}, Description: {job['description']}\n"
+            if error_jobs:
+                alert_body += "--- ERROR Jobs (More than 10 minutes or Failed) ---\n"
+                for job in error_jobs:
+                    duration_str = f", Duration: {job['duration']:.2f}s" if job['duration'] != 'N/A' else " (Failed/Incomplete)"
+                    alert_body += f"- PID: {job['pid']}, Description: {job['description']}{duration_str}\n"
                 alert_body += "\n"
 
             send_email_report(
-                subject="Log Monitor Alert: Long-Running or Failed Jobs",
+                subject="Log Monitor Alert: Warning and Error Jobs Detected",
                 body=alert_body,
                 sender_email=sender_email,
                 recipient_email=recipient_email,
