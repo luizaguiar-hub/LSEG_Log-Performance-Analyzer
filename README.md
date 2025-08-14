@@ -62,6 +62,58 @@ This is a Python application for monitoring a log file, calculating the duration
 
 No special libraries are needed; all dependencies are part of the standard Python library. Simply clone this repository to your local machine.
 
+To Clone
+git clone https://github.com/luizaguiar-hub/LSEG_Log-Performance-Analyzer
+cd Log-Performance-Analyzer
+
+### To Set Up Your Emails for Alerts
+
+1. Open the log_monitor.py File
+Locate and open the log_monitor.py script in a text editor.
+
+2. Find the Email Configuration Section
+Scroll down to the if __name__ == '__main__': block at the bottom of the script. You will see a section with three variables that need to be updated.
+
+Python
+
+    # --- EMAIL CONFIGURATION ---
+    # !!! IMPORTANT: Fill in your email details here. !!!
+    sender_email = "your_email@example.com"
+    sender_password = "your_password"
+    recipient_email = "your_recipient@example.com"
+3. Fill in Your Email Details
+sender_email: Replace "your_email@example.com" with the Gmail address you want to use to send the alerts.
+
+sender_password: This is the most crucial part. You cannot use your regular Gmail password. You need to generate an App Password from your Google Account settings. This is a special, secure password that gives the script permission to log in and send emails without compromising your main account password.
+
+recipient_email: Replace "your_recipient@example.com" with the email address where you want to receive the alerts. This can be the same as your sender email or a different one.
+
+4. Generate an App Password for Gmail
+Since this is the most common point of failure, here are the steps to get your App Password:
+
+Go to your Google Account.
+
+Navigate to Security.
+
+Under the "How you sign in to Google" section, click on 2-Step Verification. You must have this enabled to use App Passwords. If it's not enabled, follow the steps to set it up.
+
+After enabling 2-Step Verification, go back to the Security page and find App passwords. Click on it.
+
+You will be asked to sign in again.
+
+Under "Select app," choose Mail.
+
+Under "Select device," choose Other (Custom name) and give it a name like "Python Log Monitor."
+
+Click Generate.
+
+A 16-character password will be displayed. This is your App Password. Copy this password and paste it into the sender_password variable in your script.
+
+Note: Once you close this window, you will not be able to see the App Password again, so be sure to copy it immediately.
+
+5. Save and Run the Script
+After updating the email variables and saving the log_monitor.py file, you can run the script as usual. If a job meets the alert criteria (runs for more than 5 minutes or fails), you will receive an email notification.
+
 ### Change, Logs and Fixes
 
 1. Initial Bug Fix: Correcting the Test Assertion
@@ -104,3 +156,6 @@ New Function: A new function, send_email_report, was added using Python's smtpli
 Alert Logic: The if __name__ == '__main__': block was modified to check the new report categories. If longer_than_5min, longer_than_10min, or failed jobs exist, an email is composed with a detailed body listing these specific jobs and is then sent using the new function.
 
 Configuration: The script now includes placeholders for email configuration (sender_email, sender_password, recipient_email), which the user needs to fill in to use the feature.
+
+
+
