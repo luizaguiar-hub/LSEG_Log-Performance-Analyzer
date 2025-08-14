@@ -199,7 +199,7 @@ def send_email_report(subject, body, sender_email, recipient_email, password):
 
 if __name__ == '__main__':
     # Defines the path to the log file.
-    log_file_path = 'logs 9.log'
+    log_file_path = 'logs_9.log'
     
     # --- EMAIL CONFIGURATION ---
     # !!! IMPORTANT: Fill in your email details here. !!!
