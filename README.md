@@ -4,6 +4,8 @@ This is a Python script that analyzes log files to assess job performance. It pa
 Description
 This is a Python script that analyzes log files to assess job performance. It parses log data, calculates job durations, and generates a report that groups jobs into categories based on their runtime, making it easy to identify slow or failed tasks.
 
+You can find an example of the report on the file log_report.txt
+
 Usage
 To use the script, you'll need a log file in the following format, with each line containing a timestamp, job description, action, and process ID (PID):
 
